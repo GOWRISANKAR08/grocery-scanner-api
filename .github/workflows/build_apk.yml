@@ -1,0 +1,78 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build Flutter APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Generate Android platform scaffolding
+        working-directory: flutter_app
+        run: |
+          flutter create . --project-name grocery_scanner --platforms android
+
+      - name: Configure Android permissions & SDK settings
+        working-directory: flutter_app
+        run: |
+          python3 -c '
+          import re
+
+          # 1. Update AndroidManifest.xml
+          manifest_file = "android/app/src/main/AndroidManifest.xml"
+          with open(manifest_file, "r") as f:
+              manifest = f.read()
+          
+          perms = """    <uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.CAMERA" />\n"""
+          if "android.permission.CAMERA" not in manifest:
+              manifest = manifest.replace("<application", perms + "    <application", 1)
+          
+          with open(manifest_file, "w") as f:
+              f.write(manifest)
+
+          # 2. Update build.gradle for minSdk 21
+          gradle_file = "android/app/build.gradle"
+          with open(gradle_file, "r") as f:
+              gradle = f.read()
+          
+          gradle = re.sub(r"minSdkVersion\s+.*", "minSdkVersion 21", gradle)
+          gradle = re.sub(r"minSdk\s*=.*", "minSdk = 21", gradle)
+          
+          with open(gradle_file, "w") as f:
+              f.write(gradle)
+          print("Android configuration updated successfully.")
+          '
+
+      - name: Get Flutter dependencies
+        working-directory: flutter_app
+        run: flutter pub get
+
+      - name: Build Release APK
+        working-directory: flutter_app
+        run: flutter build apk --release
+
+      - name: Upload APK as Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: grocery-scanner-release-apk
+          path: flutter_app/build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
