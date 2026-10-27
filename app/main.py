@@ -17,6 +17,16 @@ app = FastAPI(title="Grocery Scanner API", version="1.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 
+@app.get("/")
+def root():
+    return {
+        "status": "online",
+        "message": "Grocery Scanner API is running!",
+        "docs": "/docs",
+        "health": "/health"
+    }
+
+
 # ---------- Auth ----------
 @app.post("/auth/register", response_model=schemas.TokenOut)
 def register(body: schemas.RegisterIn, db: Session = Depends(get_db)):
